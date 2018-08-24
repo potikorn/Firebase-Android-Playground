@@ -27,15 +27,40 @@ exports.onUserDelete = functions.auth.user().onDelete((user) => {
 exports.sendNotification = functions.database.ref('chat-room/{pushId}/messages/{secondPushId}')
     .onWrite((change, context) => {
         const message = change.after.val();
-        console.log(message);
+        const roomRefKey = change.after.ref.parent.ref.parent.key;
+        console.log(roomRefKey);
         const msg = message.text;
         const uid = message.user;
         console.log(msg + " " + uid);
         const promises = [];
 
-        const allMembers = admin.database().ref('chat-room/{pushId}/members').once('value')
-            .then(data => {        
-                console.log(data.val());
-                return data.val();
+        const allMembers = admin.database()
+            .ref('chat-room')
+            .child(roomRefKey)
+            .child('members')
+            .once('value');
+        // const getReceiverUidPromise = admin.auth().getUser(uid);
+
+        return allMembers.then(result => {
+            var members;
+            result.forEach(element => {
+                console.log(element.key + " : " + element.val());
+                if (element.key !== uid)
+                    members.push(element.key);
             });
+            console.log("members : " + members);
+            members.forEach(memberUid => {
+                admin.messaging().sendToDevice()
+            });
+            return null;
+        });
+
+        // return Promise.all([allMembers, getReceiverUidPromise]).then(results => {
+        //     const instanceId = results[0].val();
+        //     const receiver = results[1];
+        //     console.log('notifying ' + uid + ' about ' + message.body + ' from ' + senderUid);
+
+
+        // });
+
     });
