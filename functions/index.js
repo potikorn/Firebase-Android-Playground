@@ -32,35 +32,67 @@ exports.sendNotification = functions.database.ref('chat-room/{pushId}/messages/{
         const msg = message.text;
         const uid = message.user;
         console.log(msg + " " + uid);
-        const promises = [];
 
-        const allMembers = admin.database()
-            .ref('chat-room')
-            .child(roomRefKey)
-            .child('members')
-            .once('value');
-        // const getReceiverUidPromise = admin.auth().getUser(uid);
+        return getAllMemberInChatRoom(roomRefKey, uid)
+            .then(members => {
+                console.log("After then members : " + members);
+                return getAllUsers(members);
+            })
+            .then(fcmTokenList => {
+                console.log("After excuted getTokenList : " + fcmTokenList);
+                return sendPayload(fcmTokenList, msg);
+            });
+    });
 
-        return allMembers.then(result => {
-            var members;
-            result.forEach(element => {
-                console.log(element.key + " : " + element.val());
+function getAllMemberInChatRoom(roomRefKey, uid) {
+    return admin.database()
+        .ref('chat-room')
+        .child(roomRefKey)
+        .child('members')
+        .once('value')
+        .then(snapShot => {
+            var members = [];
+            snapShot.forEach(element => {
                 if (element.key !== uid)
                     members.push(element.key);
             });
-            console.log("members : " + members);
-            members.forEach(memberUid => {
-                admin.messaging().sendToDevice()
-            });
-            return null;
+            return members;
         });
+}
 
-        // return Promise.all([allMembers, getReceiverUidPromise]).then(results => {
-        //     const instanceId = results[0].val();
-        //     const receiver = results[1];
-        //     console.log('notifying ' + uid + ' about ' + message.body + ' from ' + senderUid);
+function getAllUsers(members) {
+    var fcmToken = [];
+    return admin.database()
+        .ref('playground-user')
+        .once('value')
+        .then(users => {
+            users.forEach(user => {
+                if (members.includes(user.key)) {
+                    console.log(user.val());
+                    if (user.child('fcm_token').val() !== null)
+                        fcmToken.push(user.child('fcm_token').val());
+                }
+            });
+            console.log(fcmToken);
+            return fcmToken;
+        });
+}
 
-
-        // });
-
-    });
+function sendPayload(fcmTokenList, message) {
+    const payload = {
+        notification: {
+            title: "มีข้อความใหม่",
+            body: message
+        }
+    };
+    var options = {
+        priority: "high"
+    };
+    admin.messaging().sendToDevice(fcmTokenList, payload, options)
+        .then(response => {
+            return console.log("Successfully sent message:", response);
+        })
+        .catch(error => {
+            console.log("Error sending message:", error);
+        });
+}
