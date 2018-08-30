@@ -29,6 +29,10 @@ exports.sendNotification = functions.database.ref('chat-room/{pushId}/messages/{
         const message = change.after.val();
         const roomRefKey = change.after.ref.parent.ref.parent.key;
         console.log(roomRefKey);
+        var payloadObj = {};
+        payloadObj.msg = message.text;
+        payloadObj.uid = message.user;
+
         const msg = message.text;
         const uid = message.user;
         console.log(msg + " " + uid);
@@ -40,7 +44,7 @@ exports.sendNotification = functions.database.ref('chat-room/{pushId}/messages/{
             })
             .then(fcmTokenList => {
                 console.log("After excuted getTokenList : " + fcmTokenList);
-                return sendPayload(fcmTokenList, msg);
+                return sendPayload(fcmTokenList, payloadObj);
             });
     });
 
@@ -78,11 +82,15 @@ function getAllUsers(members) {
         });
 }
 
-function sendPayload(fcmTokenList, message) {
+function sendPayload(fcmTokenList, payloadObj) {
     const payload = {
         notification: {
-            title: "มีข้อความใหม่",
-            body: message
+            title: "มีข้อความใหม่จาก",
+            body: payloadObj.msg,
+            tag: "incoming_message"
+        },
+        data: {
+            tempData: "test data payload"
         }
     };
     var options = {
@@ -96,3 +104,15 @@ function sendPayload(fcmTokenList, message) {
             console.log("Error sending message:", error);
         });
 }
+
+exports.updateChatNode = functions.database.ref('chat-room/{pushId}/messages/')
+    .onUpdate((change, context) => {
+        const roomRefKey = change.after.ref.parent.key;
+        console.log('chat-room/' + roomRefKey);
+        return admin.database()
+            .ref('chat-room')
+            .child(roomRefKey)
+            .update({
+                "updated_at": (new Date().getTime())
+            });
+    });
